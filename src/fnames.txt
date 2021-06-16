@@ -1,0 +1,4 @@
+../genome1.fasta.sketch
+../genome2.fasta.sketch
+../genome3.fasta.sketch
+../genome4.fasta.sketch
