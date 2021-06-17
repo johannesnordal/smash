@@ -58,7 +58,7 @@ void MinHash::operator()(const std::vector<string>& seqs)
         return x.hash() < y.hash();
     };
     
-    for (auto seq : seqs)
+    for (const auto& seq : seqs)
     {
         KmerIterator it(seq.c_str());
 

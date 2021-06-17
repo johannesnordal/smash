@@ -15,9 +15,9 @@ std::map<uint64_t, std::vector<std::string>> make_table(
     for (int i = 0; i < sketch_list.size(); i++)
     {
         SketchData& sketch = sketch_list[i];
-        for (uint64_t x : sketch.minhash)
+        for (uint64_t hashmer : sketch.minhash)
         {
-            auto it = map.find(x);
+            auto it = map.find(hashmer);
 
             if (it != map.end())
             {
@@ -25,7 +25,9 @@ std::map<uint64_t, std::vector<std::string>> make_table(
             }
             else
             {
-                const std::pair<uint64_t, std::vector<std::string>> entry(x, { path[i] });
+                std::vector<std::string> match_list = { path[i] };
+                std::pair<uint64_t, std::vector<std::string>> entry;
+                entry = std::make_pair(hashmer, match_list);
                 map.insert(entry);
             }
         }
@@ -87,16 +89,13 @@ int main(int argc, char** argv)
 
     for (auto entry : table)
     {
-        if (entry.second.size() > 2)
+        std::cout << entry.first << ": ";
+
+        for (auto hashmer : entry.second)
         {
-            std::cout << entry.first << std::endl;
-
-            for (auto hashmer : entry.second)
-            {
-                std::cout << hashmer << std::endl;
-            }
-
-            std::cout << std::endl;
+            std::cout << hashmer << " ";
         }
+
+        std::cout << std::endl;
     }
 }
