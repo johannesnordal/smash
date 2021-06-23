@@ -5,14 +5,14 @@
 #include <string>
 #include <utility>
 #include "Sketch.hpp"
+#include "UnionFind.hpp"
 
-std::map<uint64_t, std::vector<std::string>> make_table(
-        std::vector<SketchData>& sketch_list,
-        std::vector<std::string> path)
+std::map<uint64_t, std::vector<size_t>>
+make_table(std::vector<SketchData>& sketch_list)
 {
-    std::map<uint64_t, std::vector<std::string>> map;
+    std::map<uint64_t, std::vector<size_t>> map;
 
-    for (int i = 0; i < sketch_list.size(); i++)
+    for (size_t i = 0; i < sketch_list.size(); i++)
     {
         SketchData& sketch = sketch_list[i];
         for (uint64_t hashmer : sketch.minhash)
@@ -21,12 +21,12 @@ std::map<uint64_t, std::vector<std::string>> make_table(
 
             if (it != map.end())
             {
-                it->second.push_back(path[i]);
+                it->second.push_back(i);
             }
             else
             {
-                std::vector<std::string> match_list = { path[i] };
-                std::pair<uint64_t, std::vector<std::string>> entry;
+                std::vector<size_t> match_list = { i };
+                std::pair<uint64_t, std::vector<size_t>> entry;
                 entry = std::make_pair(hashmer, match_list);
                 map.insert(entry);
             }
@@ -68,6 +68,36 @@ std::vector<std::string> read(std::string ifpath)
     return fnames;
 }
 
+void make_clusters(std::vector<SketchData>& sketch_list,
+                   std::map<uint64_t, std::vector<size_t>> table)
+{
+    UnionFind uf{sketch_list.size()};
+
+    for (size_t i = 0; i < sketch_list.size(); i++)
+    {
+        std::map<size_t, size_t> mutual;
+
+        for (auto hashmer : sketch_list[i].minhash)
+        {
+            std::vector<size_t> sketch_idx = table.find(hashmer)->second;
+
+            for (auto j : sketch_idx)
+            {
+                auto it = mutual.find(j);
+
+                if (it != mutual.end())
+                {
+                    it->second += 1;
+                }
+                else
+                {
+                    mutual.insert(
+                }
+            }
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
     std::vector<std::string> fnames;
@@ -85,17 +115,5 @@ int main(int argc, char** argv)
         sketch_list.push_back(Sketch::read(fname.c_str()));
     }
 
-    auto table = make_table(sketch_list, fnames);
-
-    for (auto entry : table)
-    {
-        std::cout << entry.first << ": ";
-
-        for (auto hashmer : entry.second)
-        {
-            std::cout << hashmer << " ";
-        }
-
-        std::cout << std::endl;
-    }
+    auto table = make_table(sketch_list);
 }
