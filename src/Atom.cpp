@@ -159,13 +159,11 @@ int main(int argc, char** argv)
         {
             auto val = clust.value(k);
 
-            std::cout << "cluster " << i << ":\n\n";
+            std::cout << ">" << i << " " << val->size() << "\n";
             for (auto x : *val)
             {
                 std::cout << fnames[x] << "\n";
             }
-
-            std::cout << "\n";
 
             delete val;
 
