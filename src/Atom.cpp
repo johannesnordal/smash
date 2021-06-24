@@ -7,33 +7,27 @@
 #include "Sketch.hpp"
 #include "UnionFind.hpp"
 
-std::map<uint64_t, std::vector<size_t>>
-make_table(std::vector<SketchData>& sketch_list)
+std::map<uint64_t, std::vector<size_t>> make_table(std::vector<SketchData>& sketch_list)
 {
-    std::map<uint64_t, std::vector<size_t>> map;
+    std::map<uint64_t, std::vector<size_t>> table;
 
     for (size_t i = 0; i < sketch_list.size(); i++)
     {
         SketchData& sketch = sketch_list[i];
-        for (uint64_t hashmer : sketch.minhash)
+        for (uint64_t hash : sketch.minhash)
         {
-            auto it = map.find(hashmer);
-
-            if (it != map.end())
+            if (table.find(hash) != table.end())
             {
-                it->second.push_back(i);
+                table[hash].push_back(i);
             }
             else
             {
-                std::vector<size_t> match_list = { i };
-                std::pair<uint64_t, std::vector<size_t>> entry;
-                entry = std::make_pair(hashmer, match_list);
-                map.insert(entry);
+                table[hash] = { i };
             }
         }
     }
 
-    return map;
+    return table;
 }
 
 std::vector<std::string> read()
@@ -68,34 +62,57 @@ std::vector<std::string> read(std::string ifpath)
     return fnames;
 }
 
-void make_clusters(std::vector<SketchData>& sketch_list,
-                   std::map<uint64_t, std::vector<size_t>> table)
+std::map<size_t, std::vector<size_t>>
+make_clusters(const std::vector<SketchData>& sketch_list,
+              const std::map<uint64_t, std::vector<size_t>>& table,
+              const size_t limit)
 {
     UnionFind uf{sketch_list.size()};
 
     for (size_t i = 0; i < sketch_list.size(); i++)
     {
+        // Indices of sketches and number of mutual hash values.
         std::map<size_t, size_t> mutual;
 
-        for (auto hashmer : sketch_list[i].minhash)
+        for (auto hash : sketch_list[i].minhash)
         {
-            std::vector<size_t> sketch_idx = table.find(hashmer)->second;
+            // Indices of sketches where hash appears.
+            const auto sketch_indices = table.find(hash)->second;
 
-            for (auto j : sketch_idx)
+            for (auto j : sketch_indices)
             {
-                auto it = mutual.find(j);
-
-                if (it != mutual.end())
-                {
-                    it->second += 1;
-                }
+                if (i == j) continue;
+                if (mutual.find(j) != mutual.end())
+                    mutual[j] += 1;
                 else
-                {
-                    mutual.insert(
-                }
+                    mutual[j] = 1;
+            }
+        }
+
+        for (auto entry : mutual)
+        {
+            if (entry.second > limit && uf.find(i) != uf.find(entry.first))
+            {
+                uf.merge(i, entry.first);
             }
         }
     }
+
+    std::map<size_t, std::vector<size_t>> clusters;
+    for (size_t x = 0; x < sketch_list.size(); x++)
+    {
+        const size_t parent = uf.find(x);
+
+        if (uf.size(parent) > 1)
+        {
+            if (clusters.find(parent) != clusters.end())
+                clusters[parent].push_back(x);
+            else
+                clusters[parent] = { x };
+        }
+    }
+
+    return clusters;
 }
 
 int main(int argc, char** argv)
@@ -115,5 +132,12 @@ int main(int argc, char** argv)
         sketch_list.push_back(Sketch::read(fname.c_str()));
     }
 
+    const size_t limit = 990;
     auto table = make_table(sketch_list);
+    auto clust = make_clusters(sketch_list, table, limit);
+
+    for (auto entry : clust)
+    {
+        std::cout << entry.first << "\n";
+    }
 }
