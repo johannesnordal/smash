@@ -6,23 +6,27 @@
 #include <utility>
 #include "Sketch.hpp"
 #include "UnionFind.hpp"
+#include "khashl.hpp"
 
-std::map<uint64_t, std::vector<size_t>> make_table(std::vector<SketchData>& sketch_list)
+using Table = klib::KHashMap<uint64_t, std::vector<size_t>*, std::hash<uint64_t>>;
+
+Table make_table(std::vector<SketchData>& sketch_list)
 {
-    std::map<uint64_t, std::vector<size_t>> table;
+    Table table;
 
     for (size_t i = 0; i < sketch_list.size(); i++)
     {
         SketchData& sketch = sketch_list[i];
         for (uint64_t hash : sketch.minhash)
         {
-            if (table.find(hash) != table.end())
+            if (table.get(hash) != table.end())
             {
-                table[hash].push_back(i);
+                table[hash]->push_back(i);
             }
             else
             {
-                table[hash] = { i };
+                table[hash] = new std::vector<size_t>;
+                table[hash]->push_back(i);
             }
         }
     }
@@ -62,57 +66,68 @@ std::vector<std::string> read(std::string ifpath)
     return fnames;
 }
 
-std::map<size_t, std::vector<size_t>>
-make_clusters(const std::vector<SketchData>& sketch_list,
-              const std::map<uint64_t, std::vector<size_t>>& table,
-              const size_t limit)
+using Clust = klib::KHashMap<size_t, std::vector<size_t>*, std::hash<size_t>>;
+
+Clust make_clusters(const std::vector<SketchData>& sketch_list,
+                    Table& table,
+                    const size_t limit)
 {
     UnionFind uf{sketch_list.size()};
 
     for (size_t i = 0; i < sketch_list.size(); i++)
     {
         // Indices of sketches and number of mutual hash values.
-        std::map<size_t, size_t> mutual;
+        klib::KHashMap<size_t, size_t, std::hash<size_t>> mutual;
 
         for (auto hash : sketch_list[i].minhash)
         {
             // Indices of sketches where hash appears.
-            const auto sketch_indices = table.find(hash)->second;
+            const auto sketch_indices = table[hash];
 
-            for (auto j : sketch_indices)
+            for (auto j : *sketch_indices)
             {
                 if (i == j) continue;
-                if (mutual.find(j) != mutual.end())
+                if (mutual.get(j) != mutual.end())
                     mutual[j] += 1;
                 else
                     mutual[j] = 1;
             }
         }
 
-        for (auto entry : mutual)
+        for (size_t k = 0; k != mutual.end(); ++k)
         {
-            if (entry.second > limit && uf.find(i) != uf.find(entry.first))
+            if (mutual.occupied(k))
             {
-                uf.merge(i, entry.first);
+                const auto j = mutual.key(k);
+                const auto c = mutual.value(k);
+
+                if (c > limit && uf.find(i) != uf.find(j))
+                    uf.merge(i, j);
             }
         }
     }
 
-    std::map<size_t, std::vector<size_t>> clusters;
+    Clust cl;
     for (size_t x = 0; x < sketch_list.size(); x++)
     {
         const size_t parent = uf.find(x);
 
         if (uf.size(parent) > 1)
         {
-            if (clusters.find(parent) != clusters.end())
-                clusters[parent].push_back(x);
+            if (cl.get(parent) != cl.end())
+            {
+                cl[parent]->push_back(x);
+            }
             else
-                clusters[parent] = { x };
+            {
+                cl[parent] = new std::vector<size_t>;
+                cl[parent]->push_back(x);
+            }
+
         }
     }
 
-    return clusters;
+    return cl;
 }
 
 int main(int argc, char** argv)
@@ -132,12 +147,33 @@ int main(int argc, char** argv)
         sketch_list.push_back(Sketch::read(fname.c_str()));
     }
 
-    const size_t limit = 990;
     auto table = make_table(sketch_list);
+
+    size_t limit = 990;
     auto clust = make_clusters(sketch_list, table, limit);
 
-    for (auto entry : clust)
+    size_t i = 0;
+    for (size_t k = 0; k != clust.end(); ++k)
     {
-        std::cout << entry.first << "\n";
+        if (clust.occupied(k))
+        {
+            auto val = clust.value(k);
+
+            std::cout << "cluster " << i << ":\n\n";
+            for (auto x : *val)
+            {
+                std::cout << fnames[x] << "\n";
+            }
+
+            std::cout << "\n";
+
+            delete val;
+
+            i++;
+        }
     }
+
+    for (size_t k = 0; k != table.end(); ++k)
+        if (table.occupied(k))
+            delete table.value(k);
 }
