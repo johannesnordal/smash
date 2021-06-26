@@ -121,31 +121,7 @@ UnionFind make_clusters(const std::vector<SketchData>& sketch_list,
 
         kh_destroy(u64, mutual);
     }
-#if 0
-    khash_t(vec64)* clust = kh_init(vec64);
 
-    for (uint64_t x = 0; x < sketch_list.size(); x++)
-    {
-        const uint64_t parent = uf.find(x);
-
-        if (uf.size(parent) > 1)
-        {
-            k = kh_get(vec64, clust, parent);
-            if (k != kh_end(clust))
-            {
-                kh_value(clust, k)->push_back(x);
-            }
-            else
-            {
-                k = kh_put(vec64, clust, parent, &code);
-                kh_value(clust, k) = new std::vector<uint64_t>;
-                kh_value(clust, k)->push_back(x);
-            }
-        }
-    }
-
-    return clust;
-#endif
     return uf;
 }
 
@@ -191,5 +167,4 @@ int main(int argc, char** argv)
     }
 
     kh_destroy(vec64, m_table);
-    // kh_destroy(vec64, clust);
 }
