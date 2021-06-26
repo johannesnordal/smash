@@ -4,34 +4,36 @@
 #include <vector>
 #include <string>
 #include <utility>
+#include <klib/khash.h>
 #include "Sketch.hpp"
 #include "UnionFind.hpp"
-#include "khashl.hpp"
 
-using Table = klib::KHashMap<uint64_t, std::vector<size_t>*, std::hash<uint64_t>>;
+KHASH_MAP_INIT_INT64(vec64, std::vector<uint64_t>*);
+KHASH_MAP_INIT_INT64(u64, uint64_t);
 
-Table make_table(std::vector<SketchData>& sketch_list)
+khash_t(vec64)* make_table(std::vector<SketchData>& sketch_list)
 {
-    Table table;
+    int ret;
+    khiter_t k;
+    khash_t(vec64)* m_table = kh_init(vec64);
 
-    for (size_t i = 0; i < sketch_list.size(); i++)
+    for (uint64_t i = 0; i < sketch_list.size(); i++)
     {
         SketchData& sketch = sketch_list[i];
         for (uint64_t hash : sketch.minhash)
         {
-            if (table.get(hash) != table.end())
+            k = kh_put(vec64, m_table, hash, &ret);
+
+            if (ret)
             {
-                table[hash]->push_back(i);
+                kh_value(m_table, k) = new std::vector<uint64_t>;
             }
-            else
-            {
-                table[hash] = new std::vector<size_t>;
-                table[hash]->push_back(i);
-            }
+
+            kh_value(m_table, k)->push_back(i);
         }
     }
 
-    return table;
+    return m_table;
 }
 
 std::vector<std::string> read()
@@ -66,68 +68,83 @@ std::vector<std::string> read(std::string ifpath)
     return fnames;
 }
 
-using Clust = klib::KHashMap<size_t, std::vector<size_t>*, std::hash<size_t>>;
-
-Clust make_clusters(const std::vector<SketchData>& sketch_list,
-                    Table& table,
-                    const size_t limit)
+khash_t(vec64)* make_clusters(const std::vector<SketchData>& sketch_list,
+        khash_t(vec64)* m_table, const uint64_t limit)
 {
     UnionFind uf{sketch_list.size()};
 
-    for (size_t i = 0; i < sketch_list.size(); i++)
+    int ret;
+    khiter_t k;
+
+    for (uint64_t i = 0; i < sketch_list.size(); i++)
     {
         // Indices of sketches and number of mutual hash values.
-        klib::KHashMap<size_t, size_t, std::hash<size_t>> mutual;
+        khash_t(u64)* mutual = kh_init(u64);
 
         for (auto hash : sketch_list[i].minhash)
         {
             // Indices of sketches where hash appears.
-            const auto sketch_indices = table[hash];
+            k = kh_get(vec64, m_table, hash);
+            std::vector<uint64_t>* sketch_indices = kh_value(m_table, k);
 
             for (auto j : *sketch_indices)
             {
                 if (i == j) continue;
-                if (mutual.get(j) != mutual.end())
-                    mutual[j] += 1;
+
+                k = kh_get(u64, mutual, j);
+
+                if (k != kh_end(mutual))
+                {
+                    kh_value(mutual, k) += 1;
+                }
                 else
-                    mutual[j] = 1;
+                {
+                    k = kh_put(u64, mutual, j, &ret);
+                    kh_value(mutual, k) = 1;
+                }
             }
         }
 
-        for (size_t k = 0; k != mutual.end(); ++k)
+        for (k = kh_begin(mutual); k != kh_end(mutual); ++k)
         {
-            if (mutual.occupied(k))
+            if (kh_exist(mutual, k))
             {
-                const auto j = mutual.key(k);
-                const auto c = mutual.value(k);
+                const auto j = kh_key(mutual, k);
+                const auto c = kh_value(mutual, k);
 
                 if (c > limit && uf.find(i) != uf.find(j))
+                {
                     uf.merge(i, j);
+                }
             }
         }
+
+        kh_destroy(u64, mutual);
     }
 
-    Clust cl;
-    for (size_t x = 0; x < sketch_list.size(); x++)
+    khash_t(vec64)* clust = kh_init(vec64);
+
+    for (uint64_t x = 0; x < sketch_list.size(); x++)
     {
-        const size_t parent = uf.find(x);
+        const uint64_t parent = uf.find(x);
 
         if (uf.size(parent) > 1)
         {
-            if (cl.get(parent) != cl.end())
+            k = kh_get(vec64, clust, parent);
+            if (k != kh_end(clust))
             {
-                cl[parent]->push_back(x);
+                kh_value(clust, k)->push_back(x);
             }
             else
             {
-                cl[parent] = new std::vector<size_t>;
-                cl[parent]->push_back(x);
+                k = kh_put(vec64, clust, parent, &ret);
+                kh_value(clust, k) = new std::vector<uint64_t>;
+                kh_value(clust, k)->push_back(x);
             }
-
         }
     }
 
-    return cl;
+    return clust;
 }
 
 int main(int argc, char** argv)
@@ -147,31 +164,28 @@ int main(int argc, char** argv)
         sketch_list.push_back(Sketch::read(fname.c_str()));
     }
 
-    auto table = make_table(sketch_list);
+    auto m_table = make_table(sketch_list);
 
-    size_t limit = 990;
-    auto clust = make_clusters(sketch_list, table, limit);
+    uint64_t limit = 990;
+    auto clust = make_clusters(sketch_list, m_table, limit);
 
-    size_t i = 0;
-    for (size_t k = 0; k != clust.end(); ++k)
+    khiter_t k;
+
+    uint64_t i = 0;
+    for (k = kh_begin(clust); k != kh_end(clust); ++k)
     {
-        if (clust.occupied(k))
+        if (kh_exist(clust, k))
         {
-            auto val = clust.value(k);
+            auto val = kh_value(clust, k);
 
-            std::cout << ">" << i << " " << val->size() << "\n";
+            printf(">%lu %lu\n", i, val->size());
+
             for (auto x : *val)
             {
-                std::cout << fnames[x] << "\n";
+                printf("%s\n", fnames[x].c_str());
             }
-
-            delete val;
 
             i++;
         }
     }
-
-    for (size_t k = 0; k != table.end(); ++k)
-        if (table.occupied(k))
-            delete table.value(k);
 }
