@@ -68,7 +68,7 @@ std::vector<std::string> read(std::string ifpath)
     return fnames;
 }
 
-khash_t(vec64)* make_clusters(const std::vector<SketchData>& sketch_list,
+UnionFind make_clusters(const std::vector<SketchData>& sketch_list,
         khash_t(vec64)* m_table, const uint64_t limit)
 {
     int code;
@@ -121,7 +121,7 @@ khash_t(vec64)* make_clusters(const std::vector<SketchData>& sketch_list,
 
         kh_destroy(u64, mutual);
     }
-
+#if 0
     khash_t(vec64)* clust = kh_init(vec64);
 
     for (uint64_t x = 0; x < sketch_list.size(); x++)
@@ -145,6 +145,8 @@ khash_t(vec64)* make_clusters(const std::vector<SketchData>& sketch_list,
     }
 
     return clust;
+#endif
+    return uf;
 }
 
 int main(int argc, char** argv)
@@ -167,28 +169,17 @@ int main(int argc, char** argv)
     auto m_table = make_table(sketch_list);
 
     uint64_t limit = 990;
-    auto clust = make_clusters(sketch_list, m_table, limit);
+    auto uf = make_clusters(sketch_list, m_table, limit);
 
     khiter_t k;
 
-    uint64_t i = 0;
-    for (k = kh_begin(clust); k != kh_end(clust); ++k)
+    printf("cluster,filename\n");
+
+    int parent;
+    for (int i = 0; i < fnames.size(); i++)
     {
-        if (kh_exist(clust, k))
-        {
-            auto val = kh_value(clust, k);
-
-            printf(">%lu %lu\n", i, val->size());
-
-            for (auto x : *val)
-            {
-                printf("%s\n", fnames[x].c_str());
-            }
-
-            delete val;
-
-            i++;
-        }
+        parent = uf.find(i);
+        printf("%d,%s\n", parent, fnames[i].c_str());
     }
 
     for (k = kh_begin(m_table); k != kh_end(m_table); ++k)
@@ -200,5 +191,5 @@ int main(int argc, char** argv)
     }
 
     kh_destroy(vec64, m_table);
-    kh_destroy(vec64, clust);
+    // kh_destroy(vec64, clust);
 }
