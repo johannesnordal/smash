@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 #include <klib/khash.h>
+// #include "khash.h"
 #include "Sketch.hpp"
 #include "UnionFind.hpp"
 
