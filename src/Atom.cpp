@@ -71,10 +71,10 @@ std::vector<std::string> read(std::string ifpath)
 khash_t(vec64)* make_clusters(const std::vector<SketchData>& sketch_list,
         khash_t(vec64)* m_table, const uint64_t limit)
 {
-    UnionFind uf{sketch_list.size()};
-
-    int ret;
+    int code;
     khiter_t k;
+
+    UnionFind uf(sketch_list.size());
 
     for (uint64_t i = 0; i < sketch_list.size(); i++)
     {
@@ -99,7 +99,7 @@ khash_t(vec64)* make_clusters(const std::vector<SketchData>& sketch_list,
                 }
                 else
                 {
-                    k = kh_put(u64, mutual, j, &ret);
+                    k = kh_put(u64, mutual, j, &code);
                     kh_value(mutual, k) = 1;
                 }
             }
@@ -137,7 +137,7 @@ khash_t(vec64)* make_clusters(const std::vector<SketchData>& sketch_list,
             }
             else
             {
-                k = kh_put(vec64, clust, parent, &ret);
+                k = kh_put(vec64, clust, parent, &code);
                 kh_value(clust, k) = new std::vector<uint64_t>;
                 kh_value(clust, k)->push_back(x);
             }
@@ -185,7 +185,20 @@ int main(int argc, char** argv)
                 printf("%s\n", fnames[x].c_str());
             }
 
+            delete val;
+
             i++;
         }
     }
+
+    for (k = kh_begin(m_table); k != kh_end(m_table); ++k)
+    {
+        if (kh_exist(m_table, k))
+        {
+            delete kh_value(m_table, k);
+        }
+    }
+
+    kh_destroy(vec64, m_table);
+    kh_destroy(vec64, clust);
 }
