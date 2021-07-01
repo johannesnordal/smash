@@ -22,6 +22,19 @@ khash_t(vec64)* make_table(std::vector<SketchData>& sketch_list)
         SketchData& sketch = sketch_list[i];
         for (uint64_t hash : sketch.minhash)
         {
+#if 0
+            k = kh_get(vec64, m_table, hash);
+
+            if (k == kh_end(m_table))
+            {
+                k = kh_put(vec64, m_table, hash, &ret);
+                kh_value(m_table, k) = new std::vector<uint64_t>;
+            }
+
+            kh_value(m_table, k)->push_back(i);
+#endif
+
+#if 1
             k = kh_put(vec64, m_table, hash, &ret);
 
             if (ret)
@@ -30,6 +43,7 @@ khash_t(vec64)* make_table(std::vector<SketchData>& sketch_list)
             }
 
             kh_value(m_table, k)->push_back(i);
+#endif
         }
     }
 
@@ -89,8 +103,6 @@ UnionFind make_clusters(const std::vector<SketchData>& sketch_list,
 
             for (auto j : *sketch_indices)
             {
-                if (i == j) continue;
-
                 k = kh_get(u64, mutual, j);
 
                 if (k != kh_end(mutual))
@@ -147,8 +159,6 @@ int main(int argc, char** argv)
     uint64_t limit = 990;
     auto uf = make_clusters(sketch_list, m_table, limit);
 
-    khiter_t k;
-
     printf("cluster,filename\n");
 
     int parent;
@@ -157,6 +167,8 @@ int main(int argc, char** argv)
         parent = uf.find(i);
         printf("%d,%s\n", parent, fnames[i].c_str());
     }
+
+    khiter_t k;
 
     for (k = kh_begin(m_table); k != kh_end(m_table); ++k)
     {
