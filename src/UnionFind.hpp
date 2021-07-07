@@ -3,31 +3,29 @@
 
 class UnionFind
 {
+    size_t n;
     int* parent;
     int* rank;
-    int* set_size;
 
     public:
 
-    UnionFind(size_t n)
+    UnionFind(size_t n) : n{n}, parent{new int[n]}, rank{new int[n]()}
     {
-        parent = new int[n];
-        set_size = new int[n];
-
         for (int i = 0; i < n; i++)
         {
             parent[i] = i;
-            set_size[i] = 1;
         }
-
-        rank = new int[n]();
     }
 
     ~UnionFind()
     {
         delete[] parent;
         delete[] rank;
-        delete[] set_size;
+    }
+
+    inline int size()
+    {
+        return n;
     }
 
     int find(int x)
@@ -39,11 +37,6 @@ class UnionFind
         }
 
         return x;
-    }
-
-    inline int size(int x)
-    {
-        return set_size[find(x)];
     }
 
     void merge(const int x, const int y)
@@ -59,12 +52,10 @@ class UnionFind
         if (rank[p] > rank[q])
         {
             parent[q] = p;
-            set_size[p] += set_size[q];
         }
         else
         {
             parent[p] = q;
-            set_size[q] += set_size[p];
 
             if (rank[p] == rank[q])
             {
