@@ -234,7 +234,7 @@ int main(int argc, char** argv)
     uint64_t limit = 995;
 
     int option;
-    while ((option = getopt(argc, argv, "l:")) != -1)
+    while ((option = getopt(argc, argv, "l:h")) != -1)
     {
         switch (option)
         {
