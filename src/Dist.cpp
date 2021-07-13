@@ -24,7 +24,8 @@ double computeRValue(int k, int n1, int n2) {
 double initializeA(double rValue, int sketchSize, double rRatio, int sharedK) {
     double bx = pow(1-rValue, sketchSize); // Þetta er a_0
     for (int i = 0; i < sharedK; i++) {
-        bx *= (sketchSize - i)/(i+1)*rRatio; // Framreiknum upp í a_x, x er stærð sniðmengis
+        // Framreiknum upp í a_x, x er stærð sniðmengis
+        bx *= (sketchSize - i)/(i+1)*rRatio;
     }
     return(bx);
 }
@@ -72,6 +73,7 @@ double shared_kmers(const std::vector<uint64_t> &m1,
                     const std::vector<uint64_t> &m2,
                     const size_t size)
 {
+
     size_t shared = 0;
     size_t unique = 0;
     size_t i = 0;

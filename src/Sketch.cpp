@@ -92,7 +92,7 @@ SketchData Sketch::read(const char* fpath)
     uint64_t hash;
     for ( ; bytes != end; bytes += sizeof(hash)) {
         hash = *(uint64_t*) bytes;
-        sdata.minhash.push_back(hash);
+        sdata.min_hash.push_back(hash);
     }
 
     fin.close();

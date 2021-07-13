@@ -10,7 +10,7 @@ struct SketchData {
     uint32_t size;
     uint64_t seed;
     std::string ifpath;
-    std::vector<uint64_t> minhash;
+    std::vector<uint64_t> min_hash;
 };
 
 struct Sketch {

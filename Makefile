@@ -24,7 +24,8 @@ OBJS2=$(OBJ)/CommandDist.o $(OBJ)/Dist.o $(OBJ)/FastaData.o $(OBJ)/MinHash.o $\
 $(BIN)/dist: $(OBJS2)
 	$(CPP) $(CFLAGS) $(OBJS2) $(DEPS) -o $@
 
-OBJS3=$(OBJ)/Sketch.o $(OBJ)/Atom.o $(OBJ)/MinHash.o $(OBJ)/FastaData.o
+OBJS3=$(OBJ)/Sketch.o $(OBJ)/Atom.o $(OBJ)/MinHash.o $(OBJ)/FastaData.o $\
+	  $(OBJ)/Dist.o
 $(BIN)/atom: $(OBJS3)
 	$(CPP) $(CFLAGS) $(OBJS3) $(DEPS) -o $@
 

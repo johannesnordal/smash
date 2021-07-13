@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
 
     double k = (double) s1.k;
     double sketchSize = std::min(s1.s, s2.s);
-    double sharedK = shared_kmers(s1.minhash, s2.minhash, sketchSize);
+    double sharedK = shared_kmers(s1.min_hash, s2.min_hash, sketchSize);
     double Jaccard = sharedK/sketchSize;;
     double mashDistance = computeDist(k, Jaccard);
     double rValue = computeRValue(k, s1.size, s2.size);
