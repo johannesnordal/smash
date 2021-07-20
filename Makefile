@@ -1,4 +1,4 @@
-CPP=clang++
+CPP=g++
 SRC=src
 OBJ=obj
 BIN=~/bin
