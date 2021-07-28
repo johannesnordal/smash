@@ -5,6 +5,7 @@
 #include <getopt.h>
 #include <cstdint>
 #include <algorithm>
+#include <postgresql/libpq-fe.h>
 
 KHASH_MAP_INIT_INT64(vector_u64, std::vector<uint64_t>*);
 KHASH_MAP_INIT_INT64(u64, uint64_t);
@@ -229,8 +230,15 @@ void usage()
     std::printf("%s\n", s);
 }
 
+static void exit_nicely(PGconn *conn)
+{
+    PQfinish(conn);
+    exit(1);
+}
+
 int main(int argc, char** argv)
 {
+    const char* conninfo = NULL;
     uint64_t limit = 995;
 
     int option;
@@ -244,6 +252,9 @@ int main(int argc, char** argv)
             case 'h':
                 usage();
                 exit(0);
+            case 'd':
+                conninfo = optarg;
+                break;
         }
     }
 
@@ -254,17 +265,33 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-    std::vector<std::string> fnames = read(argv[optind]);
+    if (conninfo == NULL)
+    {
+        std::fprintf(stderr, "Error: Missing database connection string\n\n");
+        usage();
+        exit(1);
+    }
 
     std::vector<SketchData> sketch_list;
-    sketch_list.reserve(fnames.size());
-
-    for (auto fname : fnames)
     {
-        sketch_list.push_back(Sketch::read(fname.c_str()));
+        std::vector<std::string> fnames = read(argv[optind]);
+        sketch_list.reserve(fnames.size());
+        for (auto fname : fnames)
+        {
+            sketch_list.push_back(Sketch::read(fname.c_str()));
+        }
     }
 
     auto hash_locator = make_hash_locator(sketch_list);
     auto clusters = make_clusters(sketch_list, hash_locator, limit);
     auto reps = make_reps(clusters, sketch_list);
+
+    PGconn *conn = PQconnectdb(conninfo);
+
+    if (PQstatus(conn) != CONNECTION_OK)
+    {
+        fprintf(stderr, "Error: Connection to database failed: %s",
+                PQerrorMessage(conn));
+        exit_nicely(conn);
+    }
 }
