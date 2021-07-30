@@ -1,0 +1,7 @@
+*.swp
+.git
+obj
+Dockerfile
+.gitignore
+.gitmodules
+README.md
