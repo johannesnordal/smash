@@ -1,4 +1,3 @@
-#include <filesystem>
 #include <getopt.h>
 #include "Sketch.hpp"
 
@@ -6,12 +5,14 @@ void print_usage()
 {
     static char const s[] = "Usage: sketch [options] <input> [<input>]\n\n"
         "Options:\n"
-        "  -k <i32>    Size of kmers [default: 21]\n"
+        "  -k <i32>    Size of kmers [default: 31]\n"
         "  -c <i32>    Candidate set limit [default: 1]\n"
         "  -s <i32>    Size of min hash [default: 1000]\n"
         "  -d <path>   Destination directory for sketch(s)\n"
+        "  -D <file>   Write to database file\n"
         "  -j          Write sketch(s) to JSON as well\n"
-        "  -O          Only write sketch(s) to JSON\n"
+        "  -J          Only write sketch(s) to JSON\n"
+        "  -O          Same as -J\n"
         "  -h          Show this screen.\n";
     printf("%s\n", s);
 }
@@ -28,13 +29,15 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-    MinHash::set_k(21);
+    MinHash::set_k(31);
     MinHash::set_c(1);
     MinHash::set_s(1000);
     MinHash::set_seed(0);
+    std::string fnames = "";
+    std::string database_name = "";
 
     int option;
-    while ((option = getopt(argc, argv, "k:c:s:S:d:o:hjO")) != -1)
+    while ((option = getopt(argc, argv, "f:k:c:s:d:D:o:hjO")) != -1)
     {
         switch (option)
         {
@@ -53,11 +56,16 @@ int main(int argc, char** argv)
             case 'd' :
                 Sketch::ofpath = optarg;
                 break;
+            case 'D':
+                database_name = optarg;
             case 'j' :
                 Sketch::write_json = true;
                 break;
             case 'O' :
                 Sketch::write_only_json = true;
+                break;
+            case 'f':
+                fnames = optarg;
                 break;
             case 'h' :
                 print_usage();
@@ -65,26 +73,39 @@ int main(int argc, char** argv)
         }
     }
 
-    for (; optind < argc; optind++) {
-        Sketch{argv[optind]};
+    if (fnames != "")
+    {
+        std::fstream fin;
+        fin.open(fnames, std::ios::in);
+        if (fin.is_open())
+        {
+            std::string fname;
+            while (getline(fin, fname))
+                Sketch{fname};
+        } 
+    }
+    else
+    {
+        for (; optind < argc; optind++)
+            Sketch{argv[optind]};
     }
 
     /*
-    if (argc < 3) {
-        Sketch{argv[optind]};
-        exit(0);
-    }
+       if (argc < 3) {
+       Sketch{argv[optind]};
+       exit(0);
+       }
 
-    std::vector<std::thread*> threads;
-    for (; optind < argc; optind++) {
-        thread* t = new thread(concurrent, argv[optind]);
-        threads.push_back(t);
-    }
+       std::vector<std::thread*> threads;
+       for (; optind < argc; optind++) {
+       thread* t = new thread(concurrent, argv[optind]);
+       threads.push_back(t);
+       }
 
-    for (auto t : threads)
-        t->join();
+       for (auto t : threads)
+       t->join();
 
-    for (auto t : threads)
-        delete t;
-        */
+       for (auto t : threads)
+       delete t;
+       */
 }

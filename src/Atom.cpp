@@ -5,7 +5,14 @@
 #include <getopt.h>
 #include <cstdint>
 #include <algorithm>
-#include <postgresql/libpq-fe.h>
+#define BYTE_FILE 0
+#define CLUSTER_LIMIT_ERROR 5
+
+using Pair = std::pair<uint64_t, uint64_t>;
+const bool cmp(const Pair x, const Pair y)
+{
+    return x.second > y.second;
+}
 
 KHASH_MAP_INIT_INT64(vector_u64, std::vector<uint64_t>*);
 KHASH_MAP_INIT_INT64(u64, uint64_t);
@@ -14,6 +21,7 @@ khash_t(vector_u64)* make_hash_locator(std::vector<SketchData>& sketch_list)
 {
     int ret;
     khiter_t k;
+
     khash_t(vector_u64)* hash_locator = kh_init(vector_u64);
 
     for (uint64_t i = 0; i < sketch_list.size(); i++)
@@ -128,7 +136,7 @@ khash_t(vector_u64)* make_clusters(const std::vector<SketchData>& sketch_list,
     return clusters;
 }
 
-std::vector<uint64_t> make_rep_sketch(std::vector<uint64_t>* cluster,
+std::vector<uint64_t>* make_rep_sketch(std::vector<uint64_t>* cluster,
         std::vector<SketchData>& sketch_list)
 {
     int ret;
@@ -150,12 +158,7 @@ std::vector<uint64_t> make_rep_sketch(std::vector<uint64_t>* cluster,
         }
     }
 
-    using Pair = std::pair<uint64_t, uint64_t>;
-    const auto cmp = [](const Pair x, const Pair y) -> const bool {
-        return x.second > y.second;
-    };
-
-    std::vector<std::pair<uint64_t, uint64_t>> hash_heap;
+    std::vector<Pair> hash_heap;
     for (k = kh_begin(hash_counter); k != kh_end(hash_counter); ++k)
     {
         if (kh_exist(hash_counter, k))
@@ -165,7 +168,7 @@ std::vector<uint64_t> make_rep_sketch(std::vector<uint64_t>* cluster,
 
             hash_heap.push_back(std::make_pair(hash, count));
 
-            // Need to add kmer-size variable
+            // TODO add minhash-size variable
             if (hash_heap.size() == 1000)
             {
                 std::make_heap(hash_heap.begin(), hash_heap.end(), cmp);
@@ -190,30 +193,33 @@ std::vector<uint64_t> make_rep_sketch(std::vector<uint64_t>* cluster,
         }
     }
 
-    std::vector<uint64_t> rep;
+    std::vector<uint64_t>* rep = new std::vector<uint64_t>;
     for (auto x : hash_heap)
     {
-        rep.push_back(x.first);
+        rep->push_back(x.first);
     }
 
-    std::sort(rep.begin(), rep.end());
+    std::sort(rep->begin(), rep->end());
 
     return rep;
 }
 
-std::vector<std::vector<uint64_t>> make_reps(khash_t(vector_u64)* clusters,
+khash_t(vector_u64)* make_reps(khash_t(vector_u64)* clusters,
         std::vector<SketchData>& sketch_list)
 {
-    std::vector<std::vector<uint64_t>> reps;
+    khash_t(vector_u64)* reps = kh_init(vector_u64);
 
     for (khiter_t k = kh_begin(clusters); k != kh_end(clusters); ++k)
     {
         if (kh_exist(clusters, k))
         {
+            auto parent = kh_key(clusters, k);
             auto cluster = kh_value(clusters, k);
             if (cluster->size() > 1)
             {
-                reps.push_back(make_rep_sketch(cluster, sketch_list));
+                int ret;
+                khiter_t k = kh_put(vector_u64, reps, parent, &ret);
+                kh_value(reps, k) = make_rep_sketch(cluster, sketch_list);
             }
         }
     }
@@ -221,40 +227,89 @@ std::vector<std::vector<uint64_t>> make_reps(khash_t(vector_u64)* clusters,
     return reps;
 }
 
+uint32_t find_cluster_limit(std::vector<uint64_t>* cluster,
+        std::vector<uint64_t>* rep,
+        std::vector<SketchData>& sketch_list,
+        uint64_t limit)
+{
+    uint64_t dist = limit;
+
+    for (auto i : *cluster)
+    {
+        std::vector<uint64_t> diff(rep->size());
+        std::vector<uint64_t>::iterator it;
+        auto mem = sketch_list[i].min_hash;
+        it = std::set_difference(mem.begin(), mem.end(), rep->begin(),
+                rep->end(), diff.begin()); 
+        diff.resize(it - diff.begin());
+        if (limit - diff.size() < dist)
+            dist = limit - diff.size();
+    }
+
+    return dist - CLUSTER_LIMIT_ERROR;
+}
+
+void fwrite_rep(std::vector<uint64_t>* rep, uint64_t limit,
+        std::string fname)
+{
+    std::string data;
+    std::ofstream fout(fname);
+
+#if BYTE_FILE
+    data = std::to_string(limit);
+    fout.write(data.c_str(), sizeof(data));
+
+    for (auto hash : *rep)
+    {
+        data = std::to_string(hash);
+        fout.write(data.c_str(), sizeof(data));
+    }
+#else
+    fout << limit << "\n";
+
+    for (auto hash : *rep)
+    {
+        fout << hash << "\n";
+    }
+#endif
+
+    fout.close();
+}
+
 void usage()
 {
     static char const s[] = "Usage: atom [options] <file>\n\n"
         "Options:\n"
-        "   -l <u64>    Mininum of mutual k-mers [default: 995/1000]\n"
-        "   -h          Show this screen\n";
+        "   -l <u64>    Mininum of mutual k-mers [default: 995/1000].\n"
+        "   -r          Rep sketch path\n"
+        "   -i          Info file name\n"
+        "   -h          Show this screen.\n";
     std::printf("%s\n", s);
-}
-
-static void exit_nicely(PGconn *conn)
-{
-    PQfinish(conn);
-    exit(1);
 }
 
 int main(int argc, char** argv)
 {
-    const char* conninfo = NULL;
     uint64_t limit = 995;
+    std::string rep_path = "";
+    std::string info_file = "";
 
     int option;
-    while ((option = getopt(argc, argv, "l:d:h")) != -1)
+    while ((option = getopt(argc, argv, "l:r:i:h")) != -1)
     {
         switch (option)
         {
             case 'l':
                 limit = std::atoi(optarg);
                 break;
+            case 'r':
+                rep_path = optarg;
+                break;
+            case 'i':
+                info_file = optarg;
+                break;
             case 'h':
                 usage();
                 exit(0);
-            case 'd':
-                conninfo = optarg;
-                break;
         }
     }
 
@@ -265,33 +320,102 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-    if (conninfo == NULL)
+    if (rep_path == "")
     {
-        std::fprintf(stderr, "Error: Missing database connection string\n\n");
+        std::fprintf(stderr, "Error: missing rep sketch path\n\n");
+        usage();
+        exit(1);
+    }
+
+    if (info_file == "")
+    {
+        std::fprintf(stderr, "Error: missing info file name\n\n");
         usage();
         exit(1);
     }
 
     std::vector<SketchData> sketch_list;
+    std::vector<std::string> fnames = read(argv[optind]);
+    sketch_list.reserve(fnames.size());
+    for (auto fname : fnames)
     {
-        std::vector<std::string> fnames = read(argv[optind]);
-        sketch_list.reserve(fnames.size());
-        for (auto fname : fnames)
-        {
-            sketch_list.push_back(Sketch::read(fname.c_str()));
-        }
+        sketch_list.push_back(Sketch::read(fname.c_str()));
     }
 
     auto hash_locator = make_hash_locator(sketch_list);
     auto clusters = make_clusters(sketch_list, hash_locator, limit);
     auto reps = make_reps(clusters, sketch_list);
 
-    PGconn *conn = PQconnectdb(conninfo);
-
-    if (PQstatus(conn) != CONNECTION_OK)
+    for (khiter_t k = kh_begin(reps); k != kh_end(reps); ++k)
     {
-        fprintf(stderr, "Error: Connection to database failed: %s",
-                PQerrorMessage(conn));
-        exit_nicely(conn);
+        if (kh_exist(reps, k))
+        {
+            auto clust_idx = kh_key(reps, k);
+            auto rep = kh_value(reps, k);
+            uint64_t rep_limit;
+            {
+                khiter_t k = kh_get(vector_u64, clusters, clust_idx);
+                auto cluster = kh_value(clusters, k);
+                rep_limit = find_cluster_limit(cluster, rep, sketch_list,
+                        limit);
+            }
+            fwrite_rep(rep, rep_limit, rep_path + std::to_string(clust_idx));
+        }
     }
+
+#if 0
+    std::ofstream fout(info_file);
+    fout << "cluster,members,size\n";
+    for (khiter_t k = kh_begin(clusters); k != kh_end(clusters); ++k)
+    {
+        if (kh_exist(clusters, k))
+        {
+            auto cluster = kh_key(clusters, k);
+            auto members = kh_val(clusters, k);
+
+            fout << cluster << ",";
+
+            int i;
+            for (i = 0; i < members->size() - 1; i++)
+            {
+                fout << fnames[(*members)[i]] << ";";
+            }
+
+            fout << fnames[(*members)[i]] << "," << members->size() << "\n";
+        }
+    }
+    fout.close();
+#endif
+
+    std::vector<Pair> cluster_size;
+    for (khiter_t k = kh_begin(clusters); k != kh_end(clusters); ++k)
+    {
+        if (kh_exist(clusters, k))
+        {
+            auto cluster = kh_key(clusters, k);
+            auto size = kh_value(clusters, k)->size();
+            cluster_size.push_back(std::make_pair(cluster, size));
+        }
+    }
+    printf("%ld\n", cluster_size.size());
+    std::sort(cluster_size.begin(), cluster_size.end(), cmp);
+
+    std::ofstream fout(info_file);
+    fout << "cluster,size,members\n";
+    for (auto p : cluster_size)
+    {
+        khiter_t k = kh_get(vector_u64, clusters, p.first);
+        auto members = kh_value(clusters, k);
+
+        fout << p.first << "," << p.second << ",";
+
+        int i;
+        for (i = 0; i < members->size() - 1; i++)
+        {
+            fout << fnames[(*members)[i]] << ";";
+        }
+
+        fout << fnames[(*members)[i]] << "\n";
+    }
+    fout.close();
 }

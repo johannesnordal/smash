@@ -4,7 +4,7 @@ OBJ=obj
 BIN=/usr/local/bin
 SRCS=$(wildcard $(SRC)/*.cpp)
 OBJS=$(patsubst $(SRC)/%.cpp, $(OBJ)/%.o, $(SRCS))
-DEPS=/usr/local/lib/libbifrost.a -lz -pthread -lpq
+DEPS=/usr/local/lib/libbifrost.a -lz -pthread
 CFLAGS=-Wall -Ofast -std=c++11
 
 all: $(OBJ) $(BIN) $(BIN)/sketch $(BIN)/dist $(BIN)/atom
