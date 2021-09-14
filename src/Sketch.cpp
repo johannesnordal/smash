@@ -71,7 +71,12 @@ SketchData Sketch::read(const char* fpath)
     uint32_t ifpath_len = *(uint32_t*) bytes;
     bytes += sizeof(ifpath_len);
 
-    sdata.ifpath = bytes;
+    char *s = (char*) malloc(ifpath_len + 1);
+    int i;
+    for (i = 0; i < ifpath_len; i++)
+      s[i] = bytes[i];
+    s[i] = '\0';
+    sdata.ifpath = s;
     bytes += ifpath_len;
 
     sdata.k = *(uint32_t*) bytes;

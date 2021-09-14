@@ -64,14 +64,16 @@ std::vector<std::string> read(std::string ifpath)
     return fnames;
 }
 
-std::pair<UnionFind, khash_t(vector_u64)*> make_clusters(
+khash_t(vector_u64)* make_clusters(
+    UnionFind& uf,
     const std::vector<SketchData>& sketch_list,
-    khash_t(vector_u64)* hash_locator, const uint64_t limit)
+    khash_t(vector_u64)* hash_locator,
+    const uint64_t limit)
 {
     int ret;
     khiter_t k;
 
-    UnionFind uf(sketch_list.size());
+    // UnionFind uf(sketch_list.size());
 
     for (uint64_t i = 0; i < sketch_list.size(); i++)
     {
@@ -134,7 +136,7 @@ std::pair<UnionFind, khash_t(vector_u64)*> make_clusters(
         kh_value(clusters, k)->push_back(x);
     }
 
-    return std::make_pair(uf, clusters);
+    return clusters;
 }
 
 void usage()
@@ -150,7 +152,7 @@ void usage()
 
 int main(int argc, char** argv)
 {
-    uint64_t limit = 995;
+    uint64_t limit = 990;
     std::string rep_path = "";
     std::string info_file = "";
 
@@ -183,20 +185,22 @@ int main(int argc, char** argv)
     }
 
     auto hash_locator = make_hash_locator(sketch_list);
-    auto clusters = make_clusters(sketch_list, hash_locator, limit);
+
+    UnionFind uf(sketch_list.size());
+    auto clusters = make_clusters(uf, sketch_list, hash_locator, limit);
 
     std::ofstream indices("indices");
     for (int i = 0; i < sketch_list.size(); i++)
     {
-      auto parent = clusters.first.find(i);
-      khiter_t k = kh_get(vector_u64, clusters.second, parent);
-      if (k != kh_end(clusters.second))
+      auto parent = uf.find(i);
+      khiter_t k = kh_get(vector_u64, clusters, parent);
+      if (k != kh_end(clusters))
       {
         indices << i << " " << sketch_list[i].ifpath << " " << parent << "\n";
       }
       else
       {
-        indices << i << " " << sketch_list[i].ifpath << " NULL\n";
+        indices << i << " " << sketch_list[i].ifpath.c_str() << " NULL\n";
       }
     }
     indices.close();
@@ -218,23 +222,24 @@ int main(int argc, char** argv)
     }
     hash_locator_file.close();
 
-    for (khiter_t k = kh_begin(clusters.second);
-         k != kh_end(clusters.second);
+    for (khiter_t k = kh_begin(clusters);
+         k != kh_end(clusters);
          ++k)
     {
-      if (kh_exist(clusters.second, k))
+      if (kh_exist(clusters, k))
       {
-        auto key = kh_key(clusters.second, k);
-        auto val = kh_val(clusters.second, k);
+        auto key = kh_key(clusters, k);
+        auto val = kh_val(clusters, k);
 
-        std::ofstream atom("atoms/" + std::to_string(key));
-
-        for (auto i : *val)
+        if (val->size() > 1)
         {
-          atom << sketch_list[i].ifpath << "\n";
-        }
+          std::ofstream atom("atoms/" + std::to_string(key));
 
-        atom.close();
+          for (auto i : *val)
+            atom << sketch_list[i].ifpath << std::endl;
+
+          atom.close();
+        }
       }
     }
 }
