@@ -313,27 +313,6 @@ int main(int argc, char** argv)
         }
     }
 
-    if (optind == argc)
-    {
-        std::fprintf(stderr, "Error: Missing input file\n\n");
-        usage();
-        exit(1);
-    }
-
-    if (rep_path == "")
-    {
-        std::fprintf(stderr, "Error: missing rep sketch path\n\n");
-        usage();
-        exit(1);
-    }
-
-    if (info_file == "")
-    {
-        std::fprintf(stderr, "Error: missing info file name\n\n");
-        usage();
-        exit(1);
-    }
-
     std::vector<SketchData> sketch_list;
     std::vector<std::string> fnames = read(argv[optind]);
     sketch_list.reserve(fnames.size());
@@ -344,78 +323,20 @@ int main(int argc, char** argv)
 
     auto hash_locator = make_hash_locator(sketch_list);
     auto clusters = make_clusters(sketch_list, hash_locator, limit);
-    auto reps = make_reps(clusters, sketch_list);
 
-    for (khiter_t k = kh_begin(reps); k != kh_end(reps); ++k)
+    std::ofstream hash_locator_file("hash_locator");
+    for (khiter_t k = kh_begin(hash_locator); k != kh_end(hash_locator); ++k)
     {
-        if (kh_exist(reps, k))
+      if (kh_exist(hash_locator, k))
+      {
+        auto key = kh_key(hash_locator, k);
+        auto val = kh_value(hash_locator, k);
+        hash_locator_file << key << " ";
+        for (auto mem : *val)
         {
-            auto clust_idx = kh_key(reps, k);
-            auto rep = kh_value(reps, k);
-            uint64_t rep_limit;
-            {
-                khiter_t k = kh_get(vector_u64, clusters, clust_idx);
-                auto cluster = kh_value(clusters, k);
-                rep_limit = find_cluster_limit(cluster, rep, sketch_list,
-                        limit);
-            }
-            fwrite_rep(rep, rep_limit, rep_path + std::to_string(clust_idx));
+          hash_locator_file << mem << " ";
         }
+      }
     }
-
-#if 0
-    std::ofstream fout(info_file);
-    fout << "cluster,members,size\n";
-    for (khiter_t k = kh_begin(clusters); k != kh_end(clusters); ++k)
-    {
-        if (kh_exist(clusters, k))
-        {
-            auto cluster = kh_key(clusters, k);
-            auto members = kh_val(clusters, k);
-
-            fout << cluster << ",";
-
-            int i;
-            for (i = 0; i < members->size() - 1; i++)
-            {
-                fout << fnames[(*members)[i]] << ";";
-            }
-
-            fout << fnames[(*members)[i]] << "," << members->size() << "\n";
-        }
-    }
-    fout.close();
-#endif
-
-    std::vector<Pair> cluster_size;
-    for (khiter_t k = kh_begin(clusters); k != kh_end(clusters); ++k)
-    {
-        if (kh_exist(clusters, k))
-        {
-            auto cluster = kh_key(clusters, k);
-            auto size = kh_value(clusters, k)->size();
-            cluster_size.push_back(std::make_pair(cluster, size));
-        }
-    }
-    printf("%ld\n", cluster_size.size());
-    std::sort(cluster_size.begin(), cluster_size.end(), cmp);
-
-    std::ofstream fout(info_file);
-    fout << "cluster,size,members\n";
-    for (auto p : cluster_size)
-    {
-        khiter_t k = kh_get(vector_u64, clusters, p.first);
-        auto members = kh_value(clusters, k);
-
-        fout << p.first << "," << p.second << ",";
-
-        int i;
-        for (i = 0; i < members->size() - 1; i++)
-        {
-            fout << fnames[(*members)[i]] << ";";
-        }
-
-        fout << fnames[(*members)[i]] << "\n";
-    }
-    fout.close();
+    hash_locator_file.close();
 }
