@@ -1,7 +1,7 @@
 CPP=g++
 SRC=src
 OBJ=obj
-BIN=/usr/local/bin
+BIN=bin
 SRCS=$(wildcard $(SRC)/*.cpp)
 OBJS=$(patsubst $(SRC)/%.cpp, $(OBJ)/%.o, $(SRCS))
 DEPS=/usr/local/lib/libbifrost.a -lz -pthread

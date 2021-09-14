@@ -2,7 +2,6 @@
 #define SKETCH_HPP
 #include "MinHash.hpp"
 #include "FastaData.hpp"
-#include "sqlite3.h"
 
 struct SketchData {
     uint32_t k;
@@ -22,13 +21,11 @@ struct Sketch {
     Sketch(FastaData);
     void write(const std::string&) const;
     void json(const std::string&) const;
-    void write_db(sqlite3 *db);
 
     static std::string ofpath;
     static bool write_json;
     static bool write_only_json;
     static SketchData read(const char*);
-    static std::string database_name;
 };
 
 #endif

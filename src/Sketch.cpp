@@ -141,4 +141,3 @@ void Sketch::json(const std::string& ifpath) const
 std::string Sketch::ofpath = "";
 bool Sketch::write_json = false;
 bool Sketch::write_only_json = false;
-std::string Sketch::database_name;
