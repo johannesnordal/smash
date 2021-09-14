@@ -336,6 +336,7 @@ int main(int argc, char** argv)
         {
           hash_locator_file << mem << " ";
         }
+        hash_locator_file << "\n";
       }
     }
     hash_locator_file.close();
