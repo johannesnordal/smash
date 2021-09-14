@@ -194,7 +194,9 @@ int main(int argc, char** argv)
     {
       auto parent = uf.find(i);
       khiter_t k = kh_get(vector_u64, clusters, parent);
-      if (k != kh_end(clusters))
+
+      auto val = kh_val(clusters, k);
+      if (val->size() > 1)
       {
         indices << i << " " << sketch_list[i].ifpath << " " << parent << "\n";
       }
