@@ -64,8 +64,9 @@ std::vector<std::string> read(std::string ifpath)
     return fnames;
 }
 
-khash_t(vector_u64)* make_clusters(const std::vector<SketchData>& sketch_list,
-        khash_t(vector_u64)* hash_locator, const uint64_t limit)
+std::pair<UnionFind, khash_t(vector_u64)*> make_clusters(
+    const std::vector<SketchData>& sketch_list,
+    khash_t(vector_u64)* hash_locator, const uint64_t limit)
 {
     int ret;
     khiter_t k;
@@ -133,147 +134,7 @@ khash_t(vector_u64)* make_clusters(const std::vector<SketchData>& sketch_list,
         kh_value(clusters, k)->push_back(x);
     }
 
-    return clusters;
-}
-
-std::vector<uint64_t>* make_rep_sketch(std::vector<uint64_t>* cluster,
-        std::vector<SketchData>& sketch_list)
-{
-    int ret;
-    khiter_t k;
-    khash_t(u64)* hash_counter = kh_init(u64);
-    for (auto i : *cluster)
-    {
-        for (auto hash : sketch_list[i].min_hash)
-        {
-            k = kh_get(u64, hash_counter, hash);
-
-            if (k == kh_end(hash_counter))
-            {
-                k = kh_put(u64, hash_counter, hash, &ret);
-                kh_value(hash_counter, k) = 0;
-            }
-
-            kh_value(hash_counter, k) += 1;
-        }
-    }
-
-    std::vector<Pair> hash_heap;
-    for (k = kh_begin(hash_counter); k != kh_end(hash_counter); ++k)
-    {
-        if (kh_exist(hash_counter, k))
-        {
-            const auto hash = kh_key(hash_counter, k);
-            const auto count = kh_value(hash_counter, k);
-
-            hash_heap.push_back(std::make_pair(hash, count));
-
-            // TODO add minhash-size variable
-            if (hash_heap.size() == 1000)
-            {
-                std::make_heap(hash_heap.begin(), hash_heap.end(), cmp);
-                break;
-            }
-        }
-    }
-
-    for ( ; k != kh_end(hash_counter); ++k)
-    {
-        if (kh_exist(hash_counter, k))
-        {
-            const auto hash = kh_key(hash_counter, k);
-            const auto count = kh_value(hash_counter, k);
-            if (count > hash_heap[0].second)
-            {
-                std::pop_heap(hash_heap.begin(), hash_heap.end(), cmp);
-                hash_heap.pop_back();
-                hash_heap.push_back(std::make_pair(hash, count));
-                std::push_heap(hash_heap.begin(), hash_heap.end(), cmp);
-            }
-        }
-    }
-
-    std::vector<uint64_t>* rep = new std::vector<uint64_t>;
-    for (auto x : hash_heap)
-    {
-        rep->push_back(x.first);
-    }
-
-    std::sort(rep->begin(), rep->end());
-
-    return rep;
-}
-
-khash_t(vector_u64)* make_reps(khash_t(vector_u64)* clusters,
-        std::vector<SketchData>& sketch_list)
-{
-    khash_t(vector_u64)* reps = kh_init(vector_u64);
-
-    for (khiter_t k = kh_begin(clusters); k != kh_end(clusters); ++k)
-    {
-        if (kh_exist(clusters, k))
-        {
-            auto parent = kh_key(clusters, k);
-            auto cluster = kh_value(clusters, k);
-            if (cluster->size() > 1)
-            {
-                int ret;
-                khiter_t k = kh_put(vector_u64, reps, parent, &ret);
-                kh_value(reps, k) = make_rep_sketch(cluster, sketch_list);
-            }
-        }
-    }
-
-    return reps;
-}
-
-uint32_t find_cluster_limit(std::vector<uint64_t>* cluster,
-        std::vector<uint64_t>* rep,
-        std::vector<SketchData>& sketch_list,
-        uint64_t limit)
-{
-    uint64_t dist = limit;
-
-    for (auto i : *cluster)
-    {
-        std::vector<uint64_t> diff(rep->size());
-        std::vector<uint64_t>::iterator it;
-        auto mem = sketch_list[i].min_hash;
-        it = std::set_difference(mem.begin(), mem.end(), rep->begin(),
-                rep->end(), diff.begin()); 
-        diff.resize(it - diff.begin());
-        if (limit - diff.size() < dist)
-            dist = limit - diff.size();
-    }
-
-    return dist - CLUSTER_LIMIT_ERROR;
-}
-
-void fwrite_rep(std::vector<uint64_t>* rep, uint64_t limit,
-        std::string fname)
-{
-    std::string data;
-    std::ofstream fout(fname);
-
-#if BYTE_FILE
-    data = std::to_string(limit);
-    fout.write(data.c_str(), sizeof(data));
-
-    for (auto hash : *rep)
-    {
-        data = std::to_string(hash);
-        fout.write(data.c_str(), sizeof(data));
-    }
-#else
-    fout << limit << "\n";
-
-    for (auto hash : *rep)
-    {
-        fout << hash << "\n";
-    }
-#endif
-
-    fout.close();
+    return std::make_pair(uf, clusters);
 }
 
 void usage()
@@ -324,6 +185,22 @@ int main(int argc, char** argv)
     auto hash_locator = make_hash_locator(sketch_list);
     auto clusters = make_clusters(sketch_list, hash_locator, limit);
 
+    std::ofstream indices("indices");
+    for (int i = 0; i < sketch_list.size(); i++)
+    {
+      auto parent = clusters.first.find(i);
+      khiter_t k = kh_get(vector_u64, clusters.second, parent);
+      if (k != kh_end(clusters.second))
+      {
+        indices << i << " " << sketch_list[i].ifpath << " " << parent << "\n";
+      }
+      else
+      {
+        indices << i << " " << sketch_list[i].ifpath << " NULL\n";
+      }
+    }
+    indices.close();
+
     std::ofstream hash_locator_file("hash_locator");
     for (khiter_t k = kh_begin(hash_locator); k != kh_end(hash_locator); ++k)
     {
@@ -340,4 +217,24 @@ int main(int argc, char** argv)
       }
     }
     hash_locator_file.close();
+
+    for (khiter_t k = kh_begin(clusters.second);
+         k != kh_end(clusters.second);
+         ++k)
+    {
+      if (kh_exist(clusters.second, k))
+      {
+        auto key = kh_key(clusters.second, k);
+        auto val = kh_val(clusters.second, k);
+
+        std::ofstream atom("atoms/" + std::to_string(key));
+
+        for (auto i : *val)
+        {
+          atom << sketch_list[i].ifpath << "\n";
+        }
+
+        atom.close();
+      }
+    }
 }
