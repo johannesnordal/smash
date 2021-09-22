@@ -12,7 +12,9 @@ void print_usage()
         "  -D <file>   Write to database file\n"
         "  -j          Write sketch(s) to JSON as well\n"
         "  -J          Only write sketch(s) to JSON\n"
+        "  -M          Megasketch\n"
         "  -O          Same as -J\n"
+        "  -t          Write to txt file\n"
         "  -h          Show this screen.\n";
     printf("%s\n", s);
 }
@@ -37,7 +39,7 @@ int main(int argc, char** argv)
     std::string database_name = "";
 
     int option;
-    while ((option = getopt(argc, argv, "f:k:c:s:d:D:o:hjO")) != -1)
+    while ((option = getopt(argc, argv, "f:k:c:s:d:D:o:hjMOt")) != -1)
     {
         switch (option)
         {
@@ -61,11 +63,17 @@ int main(int argc, char** argv)
             case 'j' :
                 Sketch::write_json = true;
                 break;
+            case 'M':
+                MinHash::set_s(0);
+                break;
             case 'O' :
                 Sketch::write_only_json = true;
                 break;
             case 'f':
                 fnames = optarg;
+                break;
+            case 't':
+                Sketch::write_txt = true;
                 break;
             case 'h' :
                 print_usage();

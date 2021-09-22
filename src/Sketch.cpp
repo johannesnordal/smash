@@ -6,6 +6,11 @@ Sketch::Sketch(std::string ifpath) : fdata{ifpath}
 {
     min_hash(fdata.seqs);
 
+    if (write_txt) {
+      txt(ifpath);
+      return;
+    }
+
     if (write_only_json) {
         json(ifpath);
         return;
@@ -49,6 +54,24 @@ void Sketch::write(const std::string& ifpath) const
     for (size_t i = 0; i < min_hash.size(); i++) {
         u64 = min_hash[i];
         fout.write((char*) &u64, sizeof(u64));
+    }
+
+    fout.close();
+}
+
+void Sketch::txt(const std::string& ifpath) const
+{
+    std::string ifname = ifpath.substr(ifpath.find_last_of("\\/") + 1);
+    std::string ofname = ifname + ".sketch";
+
+    std::ofstream fout(ofpath + ofname);
+
+    fout << ifpath << "\n"
+         << MinHash::k << "\n"
+         << MinHash::c << "\n"
+         << MinHash::s << "\n";
+    for (size_t i = 0; i < min_hash.size(); i++) {
+      fout << min_hash[i] << "\n";
     }
 
     fout.close();
@@ -146,3 +169,4 @@ void Sketch::json(const std::string& ifpath) const
 std::string Sketch::ofpath = "";
 bool Sketch::write_json = false;
 bool Sketch::write_only_json = false;
+bool Sketch::write_txt = false;
