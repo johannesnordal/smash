@@ -116,4 +116,6 @@ int main(int argc, char** argv)
        for (auto t : threads)
        delete t;
        */
+
+    return 0;
 }
